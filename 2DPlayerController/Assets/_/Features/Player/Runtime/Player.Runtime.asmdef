@@ -1,0 +1,17 @@
+{
+    "name": "Player.Runtime",
+    "rootNamespace": "Player.Runtime",
+    "references": [
+        "GUID:04e00d857f6224b42b877adcd921ae35",
+        "GUID:75469ad4d38634e559750d17036d5f7c"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
