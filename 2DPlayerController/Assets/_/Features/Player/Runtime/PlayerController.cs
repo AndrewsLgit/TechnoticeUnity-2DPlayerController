@@ -28,8 +28,8 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
     {
         Idle = 0,
         Moving = 1 << 0 & ~Idle,
-        Grounded = 1 << 1 & ~Jumping & ~DoubleJumping,
-        Jumping = 1 << 2,
+        Grounded = 1 << 1,
+        Jumping = 1 << 2 & ~Grounded,
         DoubleJumping = 1 << 3 | Jumping,
     }
     
@@ -56,7 +56,7 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
         _playerState = PlayerState.Idle;
         _playerTransform = transform;
         _playerRigidbody2D = GetComponentInChildren<Rigidbody2D>();
-        
+
         _inputSystem = new GameInputSystem();
         _inputSystem.Enable();
         _inputSystem.MainPlayer.SetCallbacks(this);
@@ -65,32 +65,24 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
     // Update is called once per frame
     void Update()
     {
-        // TODO: Make it so the state manager executes the methods depending on state
-        // Jump should still be called when spacebar is pressed
         ManageStates();
-        //Move(_movementInput);
-        //Jump();
     }
 
     public void OnMove(InputAction.CallbackContext context)
     {
         _movementInput = context.ReadValue<Vector2>();
-        if (_movementInput.magnitude < _maxRunSpeed)
+        if (_movementInput.magnitude < _maxRunSpeed && !Mathf.Approximately(_movementInput.magnitude, 0f))
         {
-            _playerState |= PlayerState.Moving;
-            _playerState &= ~PlayerState.Idle;
+            _playerState = AddState(_playerState, PlayerState.Moving);
+            /*_playerState |= PlayerState.Moving;
+            _playerState &= ~PlayerState.Idle;*/
         }
-        //_playerState = (movementInput.magnitude > 0) ? (PlayerState)((int)_playerState >> (1)) : _playerState | PlayerState.Idle;
-        //_playerState = (movementInput.magnitude > 0) ? ^PlayerState.Moving : PlayerState.Idle;
-        if (Mathf.Approximately(_movementInput.magnitude, 0))
+        else
         {
-            _playerState &= ~PlayerState.Moving;
-            _playerState |= PlayerState.Idle;
+            _playerState = AddState(_playerState, PlayerState.Idle);
+            /*_playerState |= PlayerState.Idle;
+            _playerState &= ~PlayerState.Moving;*/
         }
-        /*else
-        {
-            _playerState &= ~PlayerState.Idle;
-        }*/
     }
 
     public void OnLook(InputAction.CallbackContext context)
@@ -110,14 +102,23 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
         //if (!IsEqualState(_playerState, PlayerState.Grounded)) return;
         if(context.performed)
         {
-            _playerState |= PlayerState.Jumping;
+            _playerState = AddState(_playerState, PlayerState.Jumping);
+            //_playerState |= PlayerState.Jumping;
             //_playerState &= ~PlayerState.Grounded;
             Debug.Log("Jumping");
-            Jump();
+            //Jump();
         }
         //_playerState = (_playerState & PlayerState.Jumping) != 0 ? _playerState | PlayerState.Falling : _playerState & PlayerState.Falling;
     }
-    
+
+    public void OnCollisionEnter2D(Collision2D other)
+    {
+        if (other.gameObject.layer == LayerMask.NameToLayer("Ground"))
+        {
+            _playerState = AddState(_playerState, PlayerState.Grounded);
+        }
+    }
+
     #endregion
 
     #region Utils
@@ -141,14 +142,45 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
     {
         int commonBitMask = (int)state1 & (int)state2;
         //return Enum.GetValues(typeof(PlayerState)).Cast<PlayerState>().Any(state => (commonBitMask & (int)state) != 0);
-        foreach (PlayerState state in Enum.GetValues(typeof(PlayerState)))
+        /*foreach (PlayerState state in Enum.GetValues(typeof(PlayerState)))
         {
             if ((commonBitMask & (int)state) != 0)
             {
                 break;
             }
-        }
+        }*/
         return commonBitMask;
+    }
+
+    private PlayerState AddState(PlayerState playerState, PlayerState addedState)
+    {
+        switch (addedState)
+        {
+            case PlayerState.Moving:
+                playerState &= ~PlayerState.Idle;
+                //playerState |= PlayerState.Moving;
+                break;
+            case PlayerState.Grounded:
+                playerState &= ~PlayerState.Jumping;
+                playerState &= ~PlayerState.DoubleJumping;
+                //playerState |= PlayerState.Grounded;
+                break;
+            case PlayerState.Jumping:
+                playerState &= ~PlayerState.Grounded;
+                //playerState |= PlayerState.Jumping;
+                break;
+            case PlayerState.DoubleJumping:
+                playerState &= ~PlayerState.Grounded;
+                //playerState |= PlayerState.DoubleJumping;
+                break;
+            case PlayerState.Idle:
+                playerState &= ~PlayerState.Moving;
+                break;
+            default:
+                break;
+        }
+        playerState |= addedState;
+        return playerState;
     }
 
     private void ManageStates()
@@ -165,69 +197,43 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
                     Move(_movementInput);
                     Debug.Log($"(Moving) Current player state: {_playerState}, Binary state: {binaryState}");
                     break;
-                case (int)PlayerState.Idle:
+                /*case (int)PlayerState.Idle:
                     //_playerState &= ~PlayerState.Moving;
                     Debug.Log($"(Idle) Current player state: {_playerState}, Binary state: {binaryState}");
-                    break;
+                    break;*/
                 case (int)PlayerState.Jumping: case (int)PlayerState.DoubleJumping:
                     _jumpTime += Time.deltaTime;
-                    _playerState &= ~PlayerState.Grounded;
+                    //_playerState &= ~PlayerState.Grounded;
                     Jump();
                     Debug.Log($"(Jumping) Current player state: {_playerState}, Binary state: {binaryState}");
                     break;
                 case (int)PlayerState.Grounded:
                     _jumpTime = 0;
-                    _playerState &= ~PlayerState.Jumping;
-                    //_playerState &= ~PlayerState.DoubleJumping;
-                    Jump();
+                    /*_playerState &= ~PlayerState.Jumping;
+                    _playerState &= ~PlayerState.DoubleJumping;*/
+                    //Jump();
                     Debug.Log($"(Grounded) Current player state: {_playerState}, Binary state: {binaryState}");
                     break;
                 default:
                     break;
             }
         }
-        
-        //_playerState = _playerRigidbody2D.IsTouchingLayers(LayerMask.GetMask("Ground")) ? _playerState | PlayerState.Grounded : _playerState | PlayerState.Jumping;
-        if (_playerRigidbody2D.IsTouchingLayers(LayerMask.GetMask("Ground")))
+        /*if (!_playerRigidbody2D.IsTouchingLayers(LayerMask.GetMask("Ground"))/* && IsEqualState(_playerState, PlayerState.Jumping)#1#)
         {
-            _playerState |= PlayerState.Grounded;
-            //_playerState &= ~PlayerState.Jumping;
-            //_playerState &= ~PlayerState.DoubleJumping;
+            /*_playerState |= PlayerState.Grounded;
+            _playerState &= ~PlayerState.Jumping;
+            _playerState &= ~PlayerState.DoubleJumping;#1# 
+            _playerState &= ~PlayerState.Grounded;
+            //_playerState = AddState(_playerState, PlayerState.Jumping);
+            //_playerState |= PlayerState.Jumping;
         }
-
-        /*if (IsEqualState(_playerState, PlayerState.Grounded))
+        else
         {
-            _playerState ^= PlayerState.Jumping;
-            _playerState ^= PlayerState.DoubleJumping;
-        }
-
-        if (IsEqualState(_playerState, PlayerState.Jumping) || IsEqualState(_playerState, PlayerState.DoubleJumping))
-        {
-            _jumpTime += Time.deltaTime;
-            _playerState ^= PlayerState.Grounded;
+            //_playerState |= PlayerState.Grounded;
+            _playerState = AddState(_playerState, PlayerState.Grounded);
+            /*_playerState &= ~PlayerState.Jumping;
+            _playerState &= ~PlayerState.DoubleJumping;#1#
         }*/
-
-        /*switch (_playerState)
-        {
-            case (PlayerState.Grounded):
-                _playerState ^= PlayerState.Jumping;
-                _playerState ^= PlayerState.DoubleJumping;
-                break;
-            case (PlayerState.Jumping): case PlayerState.DoubleJumping:
-                _jumpTime += Time.deltaTime;
-                _playerState ^= PlayerState.Grounded;
-                break;
-            case PlayerState.Moving:
-                _playerState ^= PlayerState.Idle;
-                break;
-            case PlayerState.Idle:
-                _playerState ^= PlayerState.Moving;
-                break;
-            default:
-                break;
-        }*/
-        
-        //_playerState = (_playerState & PlayerState.Grounded) != 0 ? _playerState ^ PlayerState.Jumping : _playerState & PlayerState.Jumping;
     }
 
     private void Move(Vector2 movementInput)
@@ -237,42 +243,25 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
         {
             _playerRigidbody2D.AddForce(_playerTransform.right * (movementInput.x * _runSpeed));
         }
-        /*if (movementInput.magnitude < _maxRunSpeed)
-        {
-            _playerRigidbody2D.AddForce(_playerTransform.right * (movementInput * _runSpeed));
-            _playerState |= PlayerState.Moving;
-        }
-        //_playerState = (movementInput.magnitude > 0) ? (PlayerState)((int)_playerState >> (1)) : _playerState | PlayerState.Idle;
-        //_playerState = (movementInput.magnitude > 0) ? ^PlayerState.Moving : PlayerState.Idle;
-        if (Mathf.Approximately(movementInput.magnitude, 0))
-        {
-            _playerState ^= PlayerState.Moving;
-        }
-        else
-        {
-            _playerState ^= PlayerState.Idle;
-        }*/
     }
 
     private void Jump()
     {
-        
-        /*if (IsEqualState(_playerState, PlayerState.Grounded))
-        {
-            _jumpTime = 0;
-        }*/
-        if (!IsEqualState(_playerState, PlayerState.Grounded) && _jumpTime >= _maxJumpTime)
+        if (IsEqualState(_playerState, PlayerState.Jumping) && _jumpTime >= _maxJumpTime)
         {
             //_jumpTime += Time.deltaTime;
-            _playerRigidbody2D.AddForce(Vector2.down * (_fallForce /** Time.deltaTime*/), ForceMode2D.Impulse);
-            _playerState |= PlayerState.Jumping;
+            _playerRigidbody2D.AddForce(Vector2.down * (_fallForce), ForceMode2D.Impulse);
+            //_playerState |= PlayerState.Jumping;
             //_playerState |= PlayerState.Falling;
         }
 
         if (IsEqualState(_playerState, PlayerState.Jumping) && _jumpTime < _maxJumpTime)
         {
             //_jumpTime += Time.deltaTime;
-            _playerRigidbody2D.AddForce(Vector2.up * (_jumpForce /** Time.deltaTime*/), ForceMode2D.Impulse);
+            _playerRigidbody2D.AddForce(Vector2.up * (_jumpForce /** Time.deltaTime*/));
+            //_playerState = AddState(_playerState, PlayerState.Jumping);
+            /*_playerState |= PlayerState.Jumping;
+            _playerState &= ~PlayerState.Grounded;*/
             //_playerState &= ~PlayerState.Jumping;
             //_playerState |= PlayerState.Falling;
         }
@@ -291,6 +280,7 @@ public class PlayerController : MonoBehaviour, GameInputSystem.IMainPlayerAction
         
         // var binaryState = Convert.ToString((int)_playerState, 2);
         // Debug.Log($"Current player state: {_playerState}, Binary state: {binaryState}");
+        
     }
 
     #endregion
